@@ -4,6 +4,9 @@ from torch import nn, optim
 
 CONTEXT_SIZE = 2
 EMBEDDING_DIM = 100
+block_size = 10
+batch_size = 32
+epochs = 1000
 
 text = ""
 
@@ -29,50 +32,68 @@ class NgramModel(nn.Module):
         self.linear1 = nn.Linear(context_size * n_dim, 128)
         self.linear2 = nn.Linear(128, self.n_word)
     
-    def forward(self, x):
+    def forward(self, x, train=True):
         emb = self.embedding(x)
-        emb = emb.view(1, -1)
+        
+        if train:
+            emb = emb.view(batch_size, -1)
+        else:
+            emb = emb.view(1, -1)
+        
         out = self.linear1(emb)
         out = F.relu(out)
         out = self.linear2(out)
-        #print(f"out shape: {out.shape}")
+        
         log_prob = F.log_softmax(out, dim=1)
-        #print(log_prob)
+        
         return log_prob
+
+    def nextword(self, x):
+        pass
 
 
 ngrammodel = NgramModel(len(word_to_idx), CONTEXT_SIZE, EMBEDDING_DIM)
 criterion = nn.NLLLoss()
 optimizer = optim.Adam(ngrammodel.parameters(), lr=1e-03)
 
-for epoch in range(100):
-    #print(f'epoch: {epoch}')
-    running_loss = 0
-    for data in trigram:
-        word, label = data
-        word = torch.tensor([word_to_idx[val] for val in word], dtype=torch.long)
-        label = torch.tensor(word_to_idx[label], dtype=torch.long)
-        label = label.unsqueeze(0)
 
-        #print(f"the label: {label}")
-        # forward
-        out = ngrammodel(word)
-        loss = criterion(out, label)
-        running_loss += loss.item()
-        # backward
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-    if epoch % 9 == 0:
+def get_batch():
+    ix = torch.randint(len(trigram) - block_size, (batch_size,))
+    
+    xtensors = []
+    ytensors = []
+    for i in ix:
+        word, label = trigram[i]
+        xtensors.append(torch.tensor([word_to_idx[val] for val in word], dtype=torch.long))
+        ytensors.append(torch.tensor(word_to_idx[label], dtype=torch.long))
+
+    x = torch.stack(xtensors)
+    y = torch.stack(ytensors)
+    return x,y
+
+X, yy = get_batch()
+print(f"the shapes: {X.shape} {yy.shape}")
+
+for epoch in range(epochs):
+    X, y = get_batch()
+    
+    out = ngrammodel(X)
+    loss = criterion(out, y)
+    epochloss = loss.item()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    if epoch % 99 == 0:
         print(f'epoch: {epoch}')
-        print('Loss: {:.6f}'.format(running_loss/len(word_to_idx)))
+        print(f'Loss: {epochloss}')
 
 
 # to generate
 word, label = trigram[50]
 print(word)
 word = torch.tensor([word_to_idx[val] for val in word], dtype=torch.long)
-out = ngrammodel(word)
+out = ngrammodel(word, train=False)
 _, predict_label = torch.max(out, 1)
 predict_word = idx_to_word[predict_label.item()]
 print(f'real word: {label}, predict word: {predict_word}')
