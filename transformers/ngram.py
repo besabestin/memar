@@ -2,9 +2,15 @@ import torch
 import torch.nn.functional as F
 from torch import nn, optim
 
+
+"""
+just a simple n-gram language model
+currently a tri-gram language model
+no transformers no nothin
+"""
+
 CONTEXT_SIZE = 2
 EMBEDDING_DIM = 100
-block_size = 10
 batch_size = 32
 epochs = 1000
 
@@ -48,8 +54,15 @@ class NgramModel(nn.Module):
         
         return log_prob
 
-    def nextword(self, x):
-        pass
+    def generate(self, x, max_tokens=100):
+        for _ in range(max_tokens):
+            out = self(x[-2:], train=False)
+            _, predict_label = torch.max(out, 1)
+            x = torch.cat((x, torch.tensor([predict_label], dtype=torch.long)), dim=-1)
+        str = ""
+        for idx in x:
+            str = f"{str} {idx_to_word[idx.item()]}"
+        print(str)
 
 
 ngrammodel = NgramModel(len(word_to_idx), CONTEXT_SIZE, EMBEDDING_DIM)
@@ -58,7 +71,7 @@ optimizer = optim.Adam(ngrammodel.parameters(), lr=1e-03)
 
 
 def get_batch():
-    ix = torch.randint(len(trigram) - block_size, (batch_size,))
+    ix = torch.randint(len(trigram), (batch_size,))
     
     xtensors = []
     ytensors = []
@@ -90,10 +103,7 @@ for epoch in range(epochs):
 
 
 # to generate
-word, label = trigram[50]
-print(word)
-word = torch.tensor([word_to_idx[val] for val in word], dtype=torch.long)
-out = ngrammodel(word, train=False)
-_, predict_label = torch.max(out, 1)
-predict_word = idx_to_word[predict_label.item()]
-print(f'real word: {label}, predict word: {predict_word}')
+with torch.no_grad():
+    word = ['so', 'they']
+    word = torch.tensor([word_to_idx[val] for val in word], dtype=torch.long)
+    ngrammodel.generate(word)
