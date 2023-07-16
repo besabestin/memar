@@ -8,13 +8,24 @@ token_to_idx = {}
 idx_to_token = {}
 
 context_size = 64
-batch_size = 32
+batch_size = 512
 n_embd = 32*6
 learning_rate = 1e-04
 iters = 10000
 dropout = 0.1
 nhead = 6
 ndecoders = 6
+
+# set the device
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu"
+)
+
+print(f'using device: {device}')
 
 def encode(tokens):
     return [token_to_idx[token] for token in tokens]
@@ -111,7 +122,7 @@ class LanguageModel(nn.Module):
         self.layernorm = nn.LayerNorm(n_embd)
 
     def forward(self, x):
-        x = self.token_embedding(x) + self.position_embedding(torch.arange(context_size))
+        x = self.token_embedding(x) + self.position_embedding(torch.arange(context_size).to(device))
         x = self.layernorm(self.decoder(x))
         B, T, C = x.shape
         x = x.view(B, T*C)
@@ -120,15 +131,15 @@ class LanguageModel(nn.Module):
         return x
 
 
-model = LanguageModel()
+model = LanguageModel().to(device)
 optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
 loss_fn = nn.NLLLoss()
 
 for iter in range(iters):
     model.train()
     _batchdata = get_batch()
-    out = model(_batchdata['X'])
-    loss = loss_fn(out, _batchdata['y'].flatten())
+    out = model(_batchdata['X'].to(device))
+    loss = loss_fn(out.to(device), _batchdata['y'].flatten().to(device))
     loss.backward()
     optim.step()
     optim.zero_grad()
